@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment / Secrets
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project runtime data
+logs/
+cache/
+checkpoints/
+results/
+data/
+
+# Personal run artifacts
+my_charts*/
+cmd.txt
+=3.7.0
+
+# Test / CI
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Development tools
+.sisyphus/
+
+# uv lock (optional — uncomment if you want reproducible installs)
+# uv.lock

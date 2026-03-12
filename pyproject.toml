@@ -1,0 +1,44 @@
+[project]
+name = "vllm-hpt"
+version = "0.1.0"
+description = "vLLM Hyperparameter Tuning CLI (A2A + Traditional unified)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "kejane"},
+]
+dependencies = [
+    "openai",
+    "typer",
+    "python-dotenv",
+    "structlog",
+    "diskcache",
+    "pydantic",
+    "pydantic-settings>=2.12.0",
+    "fastapi",
+    "uvicorn[standard]",
+    "websockets",
+    "optuna>=3.0.0",
+    "cmaes>=0.10.0",
+    "matplotlib>=3.7.0",
+    "scikit-learn>=1.0.0",
+]
+
+[project.scripts]
+vllm-hpt = "vllm_hpt.cli:app"
+
+[project.optional-dependencies]
+develop = [
+    "pytest",
+    "pytest-asyncio",
+]
+gp = [
+    "torch",
+]
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+where = ["src"]

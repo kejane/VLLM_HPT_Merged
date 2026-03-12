@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vLLM HPT Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #0f1419;
+            --bg-card: rgba(255, 255, 255, 0.05);
+            --border-glass: rgba(255, 255, 255, 0.1);
+            --text-primary: #e7e9ea;
+            --text-secondary: #71767b;
+            --accent-blue: #1d9bf0;
+            --accent-green: #00ba7c;
+            --accent-red: #f4212e;
+            --accent-yellow: #ffd400;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-dark);
+            background-image: 
+                radial-gradient(ellipse at 20% 20%, rgba(29, 155, 240, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(0, 186, 124, 0.06) 0%, transparent 50%);
+            min-height: 100vh;
+            color: var(--text-primary);
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-badge {
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .status-idle { background: var(--text-secondary); }
+        .status-tuning { background: var(--accent-blue); }
+        .status-evaluating { background: var(--accent-yellow); color: #000; }
+        .status-validating { background: var(--accent-green); }
+
+        .glass-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .progress-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .progress-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .params-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        .param-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .param-name {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .param-value {
+            font-size: 18px;
+            font-weight: 600;
+            font-family: "SF Mono", Monaco, monospace;
+        }
+
+        .model-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .status-ok { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+        .status-error { background: var(--accent-red); box-shadow: 0 0 8px var(--accent-red); }
+        .status-unknown { background: var(--text-secondary); }
+
+        .model-name {
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .model-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .chart-container {
+            height: 250px;
+            position: relative;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-red);
+        }
+
+        .connection-dot.connected {
+            background: var(--accent-green);
+            box-shadow: 0 0 6px var(--accent-green);
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            body { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>
+                vLLM HPT
+                <span id="mode-badge" class="status-badge status-idle">IDLE</span>
+            </h1>
+            <div class="connection-status">
+                <div id="connection-dot" class="connection-dot"></div>
+                <span id="connection-text">Disconnected</span>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="glass-card">
+                <div class="card-title">Progress</div>
+                <div class="progress-section">
+                    <div class="progress-item">
+                        <div class="progress-label">
+                            <span>Round</span>
+                            <span id="round-text">0 / 0</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div id="round-progress" class="progress-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="progress-item">
+                        <div class="progress-label">
+                            <span id="question-label">Questions</span>
+                            <span id="question-text">0 / 0</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div id="question-progress" class="progress-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <div class="card-title">Model Status</div>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div class="model-status">
+                        <div id="exam-status-dot" class="status-dot status-unknown"></div>
+                        <span class="model-name">Exam Agent</span>
+                        <span id="exam-time" class="model-time">-</span>
+                    </div>
+                    <div class="model-status">
+                        <div id="strategy-status-dot" class="status-dot status-ok"></div>
+                        <span class="model-name">Strategy</span>
+                        <span id="strategy-info" class="model-time">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="card-title">Current Parameters</div>
+            <div id="params-container" class="params-grid">
+                <div class="param-item">
+                    <div class="param-name">temperature</div>
+                    <div class="param-value" id="param-temperature">-</div>
+                </div>
+                <div class="param-item">
+                    <div class="param-name">top_p</div>
+                    <div class="param-value" id="param-top_p">-</div>
+                </div>
+                <div class="param-item">
+                    <div class="param-name">top_k</div>
+                    <div class="param-value" id="param-top_k">-</div>
+                </div>
+                <div class="param-item">
+                    <div class="param-name">repetition_penalty</div>
+                    <div class="param-value" id="param-repetition_penalty">-</div>
+                </div>
+                <div class="param-item">
+                    <div class="param-name">max_tokens</div>
+                    <div class="param-value" id="param-max_tokens">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="card-title">Accuracy Trend</div>
+            <div class="chart-container">
+                <canvas id="accuracy-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let chart = null;
+        let reconnectTimeout = null;
+
+        function initChart() {
+            const ctx = document.getElementById('accuracy-chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Train Accuracy',
+                            data: [],
+                            borderColor: '#1d9bf0',
+                            backgroundColor: 'rgba(29, 155, 240, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                        },
+                        {
+                            label: 'Validation Accuracy',
+                            data: [],
+                            borderColor: '#00ba7c',
+                            backgroundColor: 'rgba(0, 186, 124, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#71767b' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#71767b' }
+                        },
+                        y: {
+                            min: 0,
+                            max: 1,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { 
+                                color: '#71767b',
+                                callback: v => (v * 100).toFixed(0) + '%'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateUI(state) {
+            const badge = document.getElementById('mode-badge');
+            badge.textContent = state.mode.toUpperCase();
+            badge.className = 'status-badge status-' + state.mode;
+
+            document.getElementById('round-text').textContent = 
+                `${state.current_round} / ${state.total_rounds}`;
+            const roundPct = state.total_rounds > 0 
+                ? (state.current_round / state.total_rounds * 100) : 0;
+            document.getElementById('round-progress').style.width = roundPct + '%';
+
+            const questionLabel = state.mode === 'validating' ? 'Validation' : 'Questions';
+            document.getElementById('question-label').textContent = questionLabel;
+            document.getElementById('question-text').textContent = 
+                `${state.current_question} / ${state.total_questions}`;
+            const qPct = state.total_questions > 0 
+                ? (state.current_question / state.total_questions * 100) : 0;
+            document.getElementById('question-progress').style.width = qPct + '%';
+
+            const params = state.current_params || {};
+            ['temperature', 'top_p', 'top_k', 'repetition_penalty', 'max_tokens'].forEach(p => {
+                const el = document.getElementById('param-' + p);
+                if (el) el.textContent = params[p] !== undefined ? params[p] : '-';
+            });
+
+            updateModelStatus('exam', state.exam_model);
+
+            // Update strategy info
+            const strategyInfo = document.getElementById('strategy-info');
+            if (strategyInfo) {
+                const name = state.strategy_name || '-';
+                const trial = state.trial_number !== null && state.trial_number !== undefined 
+                    ? ` (Trial #${state.trial_number})` : '';
+                strategyInfo.textContent = name.toUpperCase() + trial;
+            }
+
+            if (state.accuracy_history && state.accuracy_history.length > 0) {
+                chart.data.labels = state.accuracy_history.map(h => 'R' + h.round);
+                chart.data.datasets[0].data = state.accuracy_history.map(h => h.train);
+                chart.data.datasets[1].data = state.accuracy_history.map(h => h.validation);
+                
+                const allValues = state.accuracy_history
+                    .flatMap(h => [h.train, h.validation])
+                    .filter(v => v !== null && v !== undefined);
+                
+                if (allValues.length > 0) {
+                    const minVal = Math.min(...allValues);
+                    const maxVal = Math.max(...allValues);
+                    let range = maxVal - minVal;
+                    
+                    // Ensure minimum visible range for small variations
+                    // When values are clustered (e.g., 0.75-0.78), expand to show detail
+                    const MIN_VISIBLE_RANGE = 0.1;  // At least 10% range for visibility
+                    if (range < MIN_VISIBLE_RANGE) {
+                        const center = (minVal + maxVal) / 2;
+                        const halfRange = MIN_VISIBLE_RANGE / 2;
+                        chart.options.scales.y.min = Math.max(0, center - halfRange);
+                        chart.options.scales.y.max = Math.min(1, center + halfRange);
+                    } else {
+                        // Normal case: add 10% padding
+                        const padding = range * 0.1;
+                        chart.options.scales.y.min = Math.max(0, minVal - padding);
+                        chart.options.scales.y.max = Math.min(1, maxVal + padding);
+                    }
+                }
+                
+                chart.update('none');
+            }
+        }
+
+        function updateModelStatus(prefix, model) {
+            if (!model) return;
+            const dot = document.getElementById(prefix + '-status-dot');
+            const time = document.getElementById(prefix + '-time');
+            if (!dot || !time) return;
+            
+            dot.className = 'status-dot status-' + (model.status || 'unknown');
+            time.textContent = model.last_check 
+                ? new Date(model.last_check).toLocaleTimeString() 
+                : '-';
+        }
+
+        function setConnectionStatus(connected) {
+            const dot = document.getElementById('connection-dot');
+            const text = document.getElementById('connection-text');
+            
+            if (connected) {
+                dot.classList.add('connected');
+                text.textContent = 'Connected';
+            } else {
+                dot.classList.remove('connected');
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
+
+            ws.onopen = () => {
+                setConnectionStatus(true);
+                if (reconnectTimeout) {
+                    clearTimeout(reconnectTimeout);
+                    reconnectTimeout = null;
+                }
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const state = JSON.parse(event.data);
+                    updateUI(state);
+                } catch (e) {
+                    console.error('Parse error:', e);
+                }
+            };
+
+            ws.onclose = () => {
+                setConnectionStatus(false);
+                reconnectTimeout = setTimeout(connect, 2000);
+            };
+
+            ws.onerror = () => {
+                ws.close();
+            };
+        }
+
+        initChart();
+        connect();
+    </script>
+</body>
+</html>
