@@ -55,10 +55,15 @@ class SearchStrategy(ABC):
         self._study_name = study_name
         self._storage_path = storage_path
         self._seed = seed
-        
+
+        # 确保上级目录存在，防止 SQLite 报 unable to open database file
+        import os
+
+        os.makedirs(os.path.dirname(storage_path), exist_ok=True)
+
         # Create storage URL
         storage_url = f"sqlite:///{storage_path}"
-        
+
         # Initialize Optuna study
         self._study = optuna.create_study(
             study_name=study_name,
@@ -67,7 +72,7 @@ class SearchStrategy(ABC):
             load_if_exists=True,
             sampler=self._create_sampler(),
         )
-        
+
         logger.info(
             "Initialized search strategy",
             strategy=self.__class__.__name__,
@@ -117,7 +122,7 @@ class SearchStrategy(ABC):
         """
         if self.n_completed_trials() == 0:
             return None
-        
+
         return SamplingParams(**self._study.best_params)
 
     @property
@@ -130,7 +135,7 @@ class SearchStrategy(ABC):
         """
         if self.n_completed_trials() == 0:
             return None
-        
+
         return self._study.best_value
 
     def n_completed_trials(self) -> int:
@@ -140,7 +145,13 @@ class SearchStrategy(ABC):
         Returns:
             Number of completed trials.
         """
-        return len([t for t in self._study.trials if t.state == optuna.trial.TrialState.COMPLETE])
+        return len(
+            [
+                t
+                for t in self._study.trials
+                if t.state == optuna.trial.TrialState.COMPLETE
+            ]
+        )
 
     @property
     def study_name(self) -> str:
